@@ -2,6 +2,7 @@ import os
 from flask import Flask, request, jsonify
 import pandas as pd
 import numpy as np
+import requests as rq
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from nltk.stem.porter import PorterStemmer
@@ -81,7 +82,19 @@ def recommend(movie_title, new_df, similarity):
         index = matches.index[0]
         distances = similarity[index]
         movie_list = sorted(list(enumerate(distances)), reverse=True, key=lambda x: x[1])[1:6]
-        return {"recommendations": [new_df.iloc[i[0]].title for i in movie_list]}
+
+        posters = get_movie_posters(recommended_titles)
+        
+        # Prepare response with both titles and posters
+        recommendations = [
+            {
+                "title": title,
+                "poster_url": posters.get(title, None)  # Use None if poster not found
+            }
+            for title in recommended_titles
+        ]
+        
+        return {"recommendations": recommendations}
     except Exception as e:
         return {"error": str(e)}, 500
 
@@ -93,7 +106,29 @@ try:
 except Exception as e:
     print(f"Failed to load data: {e}")
     new_df, similarity = None, None
+def get_movie_posters(movie_titles):
+    """Fetch poster URLs for multiple movies from the mock API"""
+    posters = {}
+    for title in movie_titles:
+        try:
+            # Call your mock API
+            response = requests.get(
+                f"https://dea91516-1da3-444b-ad94-c6d0c4dfab81.mock.pstmn.io/movies_list?title={title}"
+            )
+            data = response.json()
+            
+            # Assuming the mock API returns { "title": "...", "poster_url": "..." }
+            if data and 'poster_url' in data:
+                posters[title] = data['poster_url']
+            else:
+                posters[title] = None  # Or a default placeholder image
+        except Exception as e:
+            print(f"Error fetching poster for {title}: {e}")
+            posters[title] = None
+    
+    return posters
 
+    
 # Endpoints with improved error handling
 @app.route('/recommend', methods=['GET'])
 def recommend_movies():
